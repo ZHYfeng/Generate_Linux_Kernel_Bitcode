@@ -1,0 +1,195 @@
+diff --git a/.gitignore b/.gitignore
+index 1be78fd8163b..6b4d8dec8e97 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -33,6 +33,9 @@
+ *.order
+ *.patch
+ *.s
++*.bc
++*.ll
++*.i
+ *.so
+ *.so.dbg
+ *.su
+diff --git a/Makefile b/Makefile
+index 363dd096e46e..ca51c9f7747e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -359,8 +359,8 @@ HOST_LFS_CFLAGS := $(shell getconf LFS_CFLAGS)
+ HOST_LFS_LDFLAGS := $(shell getconf LFS_LDFLAGS)
+ HOST_LFS_LIBS := $(shell getconf LFS_LIBS)
+ 
+-HOSTCC       = gcc
+-HOSTCXX      = g++
++HOSTCC       = clang
++HOSTCXX      = clang
+ HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
+ 		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS)
+ HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS)
+@@ -370,7 +370,7 @@ HOST_LOADLIBES := $(HOST_LFS_LIBS)
+ # Make variables (CC, etc...)
+ AS		= $(CROSS_COMPILE)as
+ LD		= $(CROSS_COMPILE)ld
+-CC		= $(CROSS_COMPILE)gcc
++CC		= $(CROSS_COMPILE)clang
+ CPP		= $(CC) -E
+ AR		= $(CROSS_COMPILE)ar
+ NM		= $(CROSS_COMPILE)nm
+diff --git a/kernel/Makefile b/kernel/Makefile
+index f85ae5dfa474..25c6b6d0fc8b 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -79,7 +79,7 @@ obj-$(CONFIG_AUDITSYSCALL) += auditsc.o
+ obj-$(CONFIG_AUDIT_WATCH) += audit_watch.o audit_fsnotify.o
+ obj-$(CONFIG_AUDIT_TREE) += audit_tree.o
+ obj-$(CONFIG_GCOV_KERNEL) += gcov/
+-obj-$(CONFIG_KCOV) += kcov.o
++# obj-$(CONFIG_KCOV) += kcov.o
+ obj-$(CONFIG_KPROBES) += kprobes.o
+ obj-$(CONFIG_FAIL_FUNCTION) += fail_function.o
+ obj-$(CONFIG_KGDB) += debug/
+diff --git a/mm/Makefile b/mm/Makefile
+index e669f02c5a54..a2b925c69315 100644
+--- a/mm/Makefile
++++ b/mm/Makefile
+@@ -69,7 +69,7 @@ obj-$(CONFIG_KSM) += ksm.o
+ obj-$(CONFIG_PAGE_POISONING) += page_poison.o
+ obj-$(CONFIG_SLAB) += slab.o
+ obj-$(CONFIG_SLUB) += slub.o
+-obj-$(CONFIG_KASAN)	+= kasan/
++# obj-$(CONFIG_KASAN)	+= kasan/
+ obj-$(CONFIG_FAILSLAB) += failslab.o
+ obj-$(CONFIG_MEMORY_HOTPLUG) += memory_hotplug.o
+ obj-$(CONFIG_MEMTEST)		+= memtest.o
+diff --git a/scripts/Makefile.build b/scripts/Makefile.build
+index 4f2b25d43ec9..ea1709d89144 100644
+--- a/scripts/Makefile.build
++++ b/scripts/Makefile.build
+@@ -78,13 +78,13 @@ endif
+ 
+ ifneq ($(strip $(obj-y) $(need-builtin)),)
+ builtin-target := $(obj)/built-in.o
++builtin-target_bc := $(obj)/built-in.bc
+ endif
+ 
+ modorder-target := $(obj)/modules.order
+ 
+ # We keep a list of all modules in $(MODVERDIR)
+-
+-__build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) \
++__build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(builtin-target_bc) $(lib-target) $(extra-y)) \
+ 	 $(if $(KBUILD_MODULES),$(obj-m) $(modorder-target)) \
+ 	 $(subdir-ym) $(always)
+ 	@:
+@@ -176,7 +176,7 @@ $(obj)/%.symtypes : $(src)/%.c FORCE
+ # LLVM assembly
+ # Generate .ll files from .c
+ quiet_cmd_cc_ll_c = CC $(quiet_modtag)  $@
+-      cmd_cc_ll_c = $(CC) $(c_flags) -emit-llvm -S -o $@ $<
++      cmd_cc_ll_c = $(CC) $(c_flags) -fembed-bitcode -save-temps=obj -S -o $@ $<
+ 
+ $(obj)/%.ll: $(src)/%.c FORCE
+ 	$(call if_changed_dep,cc_ll_c)
+@@ -188,7 +188,12 @@ $(obj)/%.ll: $(src)/%.c FORCE
+ quiet_cmd_cc_o_c = CC $(quiet_modtag)  $@
+ 
+ ifndef CONFIG_MODVERSIONS
+-cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $<
++cmd_cc_o_c = \
++if [[ $(@) != "scripts/mod/empty.o" ]] && [[ ! $(@) =~ "arch/x86/boot"* ]] && [[ ! $(@) =~ "arch/x86/realmode/rm"* ]] ; then \
++	$(CC) $(c_flags) -fembed-bitcode -save-temps=obj -o $(patsubst %.bc, %.o, $(@)) -c $<; \
++else \
++	$(CC) $(c_flags) -c -o $@ $<; \
++fi
+ 
+ else
+ # When module versioning is enabled the following steps are executed:
+@@ -324,6 +329,9 @@ $(obj)/%.o: $(src)/%.c $(recordmcount_source) $(objtool_dep) FORCE
+ 	$(call cmd,force_checksrc)
+ 	$(call if_changed_rule,cc_o_c)
+ 
++$(obj)/%.bc: $(src)/%.c
++	$(call if_changed_rule,cc_o_c)
++
+ # Single-part modules are special since we need to mark them in $(MODVERDIR)
+ 
+ $(single-used-m): $(obj)/%.o: $(src)/%.c $(recordmcount_source) $(objtool_dep) FORCE
+@@ -390,6 +398,13 @@ $(obj)/%.s: $(src)/%.S FORCE
+ 
+ quiet_cmd_as_o_S = AS $(quiet_modtag)  $@
+ 
++quiet_cmd_as_bc_S = $(CC) -fembed-bitcode -save-temps=obj $(quiet_modtag) $@
++cmd_as_bc_S       = $(CC) $(a_flags) -fembed-bitcode -save-temps=obj -c -o $@ $<
++asm_ign := ""
++$(obj)/%.bc: $(src)/%.S FORCE 
++	$(eval asm_ign += $@)
++	$(call if_changed_dep,as_bc_S)
++
+ ifndef CONFIG_MODVERSIONS
+ cmd_as_o_S = $(CC) $(a_flags) -c -o $@ $<
+ 
+@@ -474,9 +489,23 @@ cmd_link_o_target = $(if $(strip $(obj-y)),\
+ 		      $(cmd_secanalysis),\
+ 		      $(cmd_make_empty_builtin) $@)
+ 
++tmp = $(patsubst %.o, %.bc, $(obj-y))
++bc-y = $(filter-out $(asm_ign), $(tmp))
++ifneq ($(bc-y),"")
++	cmd_link_bc_target = $(if $(strip $(bc-y)),\
++      			llvm-link -o $@ $(filter $(bc-y), $^) \
++      			$(cmd_secanalysis),\
++				echo "" > $@)
++else
++	cmd_link_bc_target = echo "" > $@ 
++endif
++
+ $(builtin-target): $(obj-y) FORCE
+ 	$(call if_changed,link_o_target)
+ 
++$(builtin-target_bc): $(bc-y) FORCE
++	$(call if_changed,link_bc_target) 
++
+ targets += $(builtin-target)
+ endif # builtin-target
+ 
+@@ -512,6 +541,7 @@ targets += $(lib-target)
+ 
+ dummy-object = $(obj)/.lib_exports.o
+ ksyms-lds = $(dot-target).lds
++dummy-object-bc = $(obj)/.lib_exports.o.bc
+ ifdef CONFIG_HAVE_UNDERSCORE_SYMBOL_PREFIX
+ ref_prefix = EXTERN(_
+ else
+@@ -524,6 +554,7 @@ cmd_export_list = $(OBJDUMP) -h $< | \
+ 	rm -f $(dummy-object);\
+ 	echo | $(CC) $(a_flags) -c -o $(dummy-object) -x assembler -;\
+ 	$(LD) $(ld_flags) -r -o $@ -T $(ksyms-lds) $(dummy-object);\
++	echo "" > $(patsubst %.o, %.bc, $(@));\
+ 	rm $(dummy-object) $(ksyms-lds)
+ 
+ $(obj)/lib-ksyms.o: $(lib-target) FORCE
+@@ -562,8 +593,12 @@ endif
+ quiet_cmd_link_multi-m = LD [M]  $@
+ cmd_link_multi-m = $(cmd_link_multi-link)
+ 
++quiet_cmd_link_bc_multi-y = llvm-link      $@
++cmd_link_bc_multi-y = llvm-link -o $(patsubst %.o, %.bc, $@) $(patsubst %.o, %.bc, $(link_multi_deps))
++
+ $(multi-used-y): FORCE
+ 	$(call if_changed,link_multi-y)
++	$(call if_changed,link_bc_multi-y)
+ $(call multi_depend, $(multi-used-y), .o, -objs -y)
+ 
+ $(multi-used-m): FORCE
+diff --git a/scripts/Makefile.kcov b/scripts/Makefile.kcov
+index 5cc72037e423..256ae15c6f03 100644
+--- a/scripts/Makefile.kcov
++++ b/scripts/Makefile.kcov
+@@ -1,5 +1,6 @@
+ ifdef CONFIG_KCOV
+ CFLAGS_KCOV	:= $(call cc-option,-fsanitize-coverage=trace-pc,)
++CFLAGS_KCOV += $(call cc-option,-fsanitize-coverage=no-prune,)
+ ifeq ($(CONFIG_KCOV_ENABLE_COMPARISONS),y)
+ CFLAGS_KCOV += $(call cc-option,-fsanitize-coverage=trace-cmp,)
+ endif
