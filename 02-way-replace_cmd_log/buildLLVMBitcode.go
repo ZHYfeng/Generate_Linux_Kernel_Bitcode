@@ -18,7 +18,7 @@ const (
 	NameScript = "build.sh"
 
 	NameCC = "clang"
-	FlagCC = " -save-temps=obj"
+	FlagCC = " -save-temps=obj -w -mllvm -disable-llvm-optzns"
 	NameLD = "llvm-link"
 	Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 	// path of clang and llvm-link
@@ -102,7 +102,7 @@ func replaceLD(cmd string) string {
 }
 
 func buildModule(moduleDirPath string) string {
-	res := ""
+	res1 := ""
 	err := filepath.Walk(moduleDirPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -110,7 +110,7 @@ func buildModule(moduleDirPath string) string {
 			}
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				res += replaceCC(cmd, true)
+				res1 += replaceCC(cmd, true)
 			}
 			return nil
 		})
@@ -118,6 +118,7 @@ func buildModule(moduleDirPath string) string {
 		log.Println(err)
 	}
 
+	res2 := ""
 	err = filepath.Walk(moduleDirPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -125,14 +126,14 @@ func buildModule(moduleDirPath string) string {
 			}
 			if strings.HasSuffix(info.Name(), SuffixLD) {
 				cmd := getCmd(path)
-				res += replaceLD(cmd)
+				res2 = replaceLD(cmd) + res2
 			}
 			return nil
 		})
 	if err != nil {
 		log.Println(err)
 	}
-	return res
+	return res1 + res2
 }
 
 func generateScript(path string, cmd string) {
@@ -140,7 +141,7 @@ func generateScript(path string, cmd string) {
 	res += cmd
 
 	pathScript := filepath.Join(path, NameScript)
-	fmt.Printf("script path : %s\n", pathScript)
+	fmt.Printf("script path : bash %s\n", pathScript)
 	f, err := os.OpenFile(pathScript, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		log.Println(err)

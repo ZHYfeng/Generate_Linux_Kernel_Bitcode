@@ -3,7 +3,7 @@
 # Requirement
 - build kernel using clang into binary successfully
 - golang
-
+- enabled in Linux kernel configuration
 
 # Build one kernel module into LLVM Bitcode
 
