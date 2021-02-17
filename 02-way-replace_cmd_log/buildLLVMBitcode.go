@@ -84,6 +84,8 @@ func replaceCC(cmd string, addFlag bool) string {
 }
 
 func replaceLD(cmd string) string {
+
+	fmt.Println(cmd)
 	res := ""
 	i := strings.Index(cmd, " rcSTPD")
 	// fmt.Println("Index: ", i)
@@ -102,7 +104,7 @@ func replaceLD(cmd string) string {
 		fmt.Println("LD Index not found")
 	}
 
-	// fmt.Println(res)
+	fmt.Println(res)
 	return res
 }
 
@@ -146,6 +148,7 @@ func generateScript(path string, cmd string) {
 	res += cmd
 
 	pathScript := filepath.Join(path, NameScript)
+	_ = os.Remove(pathScript)
 	fmt.Printf("script path : bash %s\n", pathScript)
 	f, err := os.OpenFile(pathScript, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
