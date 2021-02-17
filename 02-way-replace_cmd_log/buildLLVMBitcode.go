@@ -88,14 +88,19 @@ func replaceLD(cmd string) string {
 	i := strings.Index(cmd, " rcSTPD")
 	// fmt.Println("Index: ", i)
 	if i > -1 {
-		res += LD
-		res += " -o"
-		res += cmd[i+7:]
+		cmd = cmd[i+8:]
+		if strings.Count(cmd, ".") > 1 {
+			res += LD
+			res += " -o "
+			res += cmd
+			res = strings.Replace(res, ".o", ".bc", -1)
+		} else {
+			res = "echo \"\" > " + cmd
+		}
+		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
 	} else {
 		fmt.Println("LD Index not found")
 	}
-	res = strings.Replace(res, ".o", ".bc", -1)
-	res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
 
 	// fmt.Println(res)
 	return res
