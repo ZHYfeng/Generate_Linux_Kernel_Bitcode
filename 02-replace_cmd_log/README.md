@@ -3,18 +3,18 @@
 # Requirement
 - build kernel using clang into binary successfully
 - golang
-- enabled in Linux kernel configuration
+- The kernel module are enabled in Linux kernel configuration
 
 # Build one kernel module into LLVM Bitcode
 
 ## Set path
 
-- set `Path` of `llvm-link` in `02-way-replace_cmd_log/buildLLVMBitcode.go`
+- set `Path` of `llvm-link` in `02-replace_cmd_log/buildLLVMBitcode.go`
 
 ## Generate script
 ```
 cd path/Linux/kernel
-go run ~/data/git/Build-Linux-Kernel-Using-Clang/02-way-replace_cmd_log/buildLLVMBitcode.go -path=./path/kernel/module
+go run path/of/code/02-replace_cmd_log/buildLLVMBitcode.go -path=./path/kernel/module
 ```
 
 ## Get LLVM Bitcode
