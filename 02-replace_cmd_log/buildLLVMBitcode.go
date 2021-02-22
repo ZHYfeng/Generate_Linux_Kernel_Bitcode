@@ -77,6 +77,15 @@ func replaceCC(cmd string, addFlag bool) string {
 			res += cmd[:i]
 			res += FlagCC
 			res += cmd[i:]
+			if strings.HasSuffix(cmd, ".S\n") {
+				s1 := strings.Split(cmd, " ")
+				s2 := s1[len(s1)-1]
+				s3 := strings.Split(s2, ".")
+				s4 := s3[0]
+
+				res += "\n"
+				res = "echo \"\" > " + s4 + ".bc"
+			}
 		} else {
 			fmt.Println(cmd)
 			fmt.Println("CC Index not found")
