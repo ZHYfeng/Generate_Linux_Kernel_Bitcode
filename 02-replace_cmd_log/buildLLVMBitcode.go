@@ -24,6 +24,8 @@ const (
 	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 	Path = ""
 	// path of clang and llvm-link
+
+	LinkVmlinux = "llvm-link -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
 )
 
 var CC = filepath.Join(Path, NameCC)
@@ -96,41 +98,29 @@ func replaceCC(cmd string, addFlag bool) string {
 
 func replaceLD(cmd string) string {
 
+	replace := func(cmd string, i int) string {
+		res := ""
+		cmd = cmd[i+8:]
+		if strings.Count(cmd, ".") > 1 {
+			res += LD
+			res += " -o "
+			res += cmd
+			res = strings.Replace(res, ".o", ".bc", -1)
+		} else {
+			res = "echo \"\" > " + cmd
+		}
+		res = strings.Replace(res, ".a ", ".bc ", -1)
+		return res
+	}
+
 	res := ""
 	// fmt.Println("Index: ", i)
 	if i := strings.Index(cmd, " rcSTPD"); i > -1 {
-		cmd = cmd[i+8:]
-		if strings.Count(cmd, ".") > 1 {
-			res += LD
-			res += " -o "
-			res += cmd
-			res = strings.Replace(res, ".o", ".bc", -1)
-		} else {
-			res = "echo \"\" > " + cmd
-		}
-		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
+		res = replace(cmd, i)
 	} else if i := strings.Index(cmd, " cDPrST"); i > -1 {
-		cmd = cmd[i+8:]
-		if strings.Count(cmd, ".") > 1 {
-			res += LD
-			res += " -o "
-			res += cmd
-			res = strings.Replace(res, ".o", ".bc", -1)
-		} else {
-			res = "echo \"\" > " + cmd
-		}
-		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
+		res = replace(cmd, i)
 	} else if i := strings.Index(cmd, " cDPrsT"); i > -1 {
-		cmd = cmd[i+8:]
-		if strings.Count(cmd, ".") > 1 {
-			res += LD
-			res += " -o "
-			res += cmd
-			res = strings.Replace(res, ".o", ".bc", -1)
-		} else {
-			res = "echo \"\" > " + cmd
-		}
-		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
+		res = replace(cmd, i)
 	} else {
 		fmt.Println(cmd)
 		fmt.Println("LD Index not found")
@@ -196,7 +186,7 @@ func generateScript(path string, cmd string) {
 }
 
 var cmd = flag.String("cmd", "module", "Build one module or whole kernel, e.g., module, kernel")
-var path = flag.String("path", ".", "The path of data, e.g., module, make.log.")
+var path = flag.String("path", ".", "The path of data, e.g., module.")
 
 func main() {
 	flag.Parse()
@@ -209,7 +199,10 @@ func main() {
 		}
 	case "kernel":
 		{
-			fmt.Printf("Build whole kernel with make.log\n")
+			fmt.Printf("Build whole kernel\n")
+			res := buildModule(*path)
+			res += LinkVmlinux
+			generateScript(*path, res)
 		}
 	default:
 		fmt.Printf("cmd is invalid\n")
