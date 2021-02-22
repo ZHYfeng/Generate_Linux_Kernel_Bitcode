@@ -25,8 +25,10 @@ bash ./path/kernel/module/build.sh
 
 # Build Linux kernel into LLVM Bitcode (Doing)
 
-## Get makefile log
+
 ```shell
-make V=1 1>make.log 2>&1
+make LLVM=1 V=1 defconfig
+make LLVM=1 V=1 -j64
+go run path/of/code/02-replace_cmd_log/buildLLVMBitcode.go -cmd=kernel -path=.
+bash build.sh
 ```
-> must only one process
