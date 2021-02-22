@@ -75,7 +75,7 @@ func replaceCC(cmd string, addFlag bool) string {
 	res := ""
 	if addFlag {
 		if i := strings.Index(cmd, " -c "); i > -1 {
-			if i := strings.Index(cmd, CmdTools); i > -1 {
+			if j := strings.Index(cmd, CmdTools); j > -1 {
 
 			} else {
 				res += cmd[:i]
