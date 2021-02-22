@@ -25,7 +25,8 @@ const (
 	Path = ""
 	// path of clang and llvm-link
 
-	LinkVmlinux = "llvm-link -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
+	CmdLinkVmlinux = "llvm-link -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
+	CmdTools       = "-BUILD_STR(s)=$(pound)s"
 )
 
 var CC = filepath.Join(Path, NameCC)
@@ -73,20 +74,22 @@ func getCmd(cmdFilePath string) string {
 func replaceCC(cmd string, addFlag bool) string {
 	res := ""
 	if addFlag {
-		i := strings.Index(cmd, " -c ")
-		// fmt.Println("Index: ", i)
-		if i > -1 {
-			res += cmd[:i]
-			res += FlagCC
-			res += cmd[i:]
-			if strings.HasSuffix(cmd, ".S\n") {
-				s1 := strings.Split(cmd, " ")
-				s2 := s1[len(s1)-1]
-				s3 := strings.Split(s2, ".")
-				s4 := s3[0]
+		if i := strings.Index(cmd, " -c "); i > -1 {
+			if i := strings.Index(cmd, CmdTools); i > -1 {
 
-				res += "\n"
-				res = "echo \"\" > " + s4 + ".bc" + "\n"
+			} else {
+				res += cmd[:i]
+				res += FlagCC
+				res += cmd[i:]
+				if strings.HasSuffix(cmd, ".S\n") {
+					s1 := strings.Split(cmd, " ")
+					s2 := s1[len(s1)-1]
+					s3 := strings.Split(s2, ".")
+					s4 := s3[0]
+
+					res += "\n"
+					res = "echo \"\" > " + s4 + ".bc" + "\n"
+				}
 			}
 		} else {
 			fmt.Println(cmd)
@@ -201,7 +204,7 @@ func main() {
 		{
 			fmt.Printf("Build whole kernel\n")
 			res := buildModule(*path)
-			res += LinkVmlinux
+			res += CmdLinkVmlinux
 			generateScript(*path, res)
 		}
 	default:
