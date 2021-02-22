@@ -84,7 +84,7 @@ func replaceCC(cmd string, addFlag bool) string {
 				s4 := s3[0]
 
 				res += "\n"
-				res = "echo \"\" > " + s4 + ".bc"
+				res = "echo \"\" > " + s4 + ".bc" + "\n"
 			}
 		} else {
 			fmt.Println(cmd)
