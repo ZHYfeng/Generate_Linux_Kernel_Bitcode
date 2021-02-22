@@ -18,9 +18,11 @@ const (
 	NameScript = "build.sh"
 
 	NameCC = "clang"
-	FlagCC = " -save-temps=obj -w -mllvm -disable-llvm-optzns"
+	// FlagCC = " -save-temps=obj -w -mllvm -disable-llvm-optzns"
+	FlagCC = " -save-temps=obj -w"
 	NameLD = "llvm-link"
-	Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
+	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
+	Path = ""
 	// path of clang and llvm-link
 )
 
@@ -51,9 +53,9 @@ func getCmd(cmdFilePath string) string {
 				// fmt.Println("Index: ", i)
 				if i > -1 {
 					cmd := eachLine[i+3:]
-					// fmt.Println(cmd)
 					res = cmd
 				} else {
+					fmt.Println(eachLine)
 					fmt.Println("Cmd Index not found")
 				}
 			}
@@ -75,8 +77,8 @@ func replaceCC(cmd string, addFlag bool) string {
 			res += cmd[:i]
 			res += FlagCC
 			res += cmd[i:]
-			// fmt.Println(res)
 		} else {
+			fmt.Println(cmd)
 			fmt.Println("CC Index not found")
 		}
 	}
@@ -85,11 +87,31 @@ func replaceCC(cmd string, addFlag bool) string {
 
 func replaceLD(cmd string) string {
 
-	fmt.Println(cmd)
 	res := ""
-	i := strings.Index(cmd, " rcSTPD")
 	// fmt.Println("Index: ", i)
-	if i > -1 {
+	if i := strings.Index(cmd, " rcSTPD"); i > -1 {
+		cmd = cmd[i+8:]
+		if strings.Count(cmd, ".") > 1 {
+			res += LD
+			res += " -o "
+			res += cmd
+			res = strings.Replace(res, ".o", ".bc", -1)
+		} else {
+			res = "echo \"\" > " + cmd
+		}
+		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
+	} else if i := strings.Index(cmd, " cDPrST"); i > -1 {
+		cmd = cmd[i+8:]
+		if strings.Count(cmd, ".") > 1 {
+			res += LD
+			res += " -o "
+			res += cmd
+			res = strings.Replace(res, ".o", ".bc", -1)
+		} else {
+			res = "echo \"\" > " + cmd
+		}
+		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
+	} else if i := strings.Index(cmd, " cDPrsT"); i > -1 {
 		cmd = cmd[i+8:]
 		if strings.Count(cmd, ".") > 1 {
 			res += LD
@@ -101,10 +123,10 @@ func replaceLD(cmd string) string {
 		}
 		res = strings.Replace(res, "built-in.a", "built-in.bc", -1)
 	} else {
+		fmt.Println(cmd)
 		fmt.Println("LD Index not found")
 	}
 
-	fmt.Println(res)
 	return res
 }
 
@@ -117,7 +139,12 @@ func buildModule(moduleDirPath string) string {
 			}
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				res1 += replaceCC(cmd, true)
+				if strings.HasPrefix(cmd, NameCC) {
+					res1 += replaceCC(cmd, true)
+				} else {
+					fmt.Println(path)
+					fmt.Println(cmd)
+				}
 			}
 			return nil
 		})
