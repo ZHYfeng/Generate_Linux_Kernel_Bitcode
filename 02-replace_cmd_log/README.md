@@ -29,6 +29,6 @@ bash ./path/kernel/module/build.sh
 ```shell
 make LLVM=1 V=1 defconfig
 make LLVM=1 V=1 -j64
-go run ~/data/git/02-replace_cmd_log/buildLLVMBitcode.go -cmd=kernel -path=.
+go run ~/data/git/02-replace_cmd_log/2019-Build_Linux_Kernel_Into_LLVM_Bitcode/buildLLVMBitcode.go -cmd=kernel -path=.
 bash build.sh
 ```
