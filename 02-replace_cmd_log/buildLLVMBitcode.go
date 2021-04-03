@@ -113,6 +113,7 @@ func replaceLD(cmd string) string {
 			res = "echo \"\" > " + cmd
 		}
 		res = strings.Replace(res, ".a ", ".bc ", -1)
+		res = strings.Replace(res, ".a\n", ".bc\n", -1)
 		return res
 	}
 

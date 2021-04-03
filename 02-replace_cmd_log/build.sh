@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "" > certs/system_certificates.bc
+llvm-link -o sound/core/built-in.bc sound/core/sound.bc sound/core/init.bc sound/core/memory.bc sound/core/control.bc sound/core/misc.bc sound/core/device.bc sound/core/info.bc sound/core/isadma.bc sound/core/vmaster.bc sound/core/ctljack.bc sound/core/jack.bc sound/core/hwdep.bc sound/core/timer.bc sound/core/hrtimer.bc sound/core/pcm.bc sound/core/pcm_native.bc sound/core/pcm_lib.bc sound/core/pcm_misc.bc sound/core/pcm_memory.bc sound/core/memalloc.bc sound/core/pcm_timer.bc sound/core/sgbuf.bc sound/core/seq_device.bc sound/core/seq/built-in.bc
