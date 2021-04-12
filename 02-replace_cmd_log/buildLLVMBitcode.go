@@ -18,9 +18,12 @@ const (
 	NameScript = "build.sh"
 
 	NameCC = "clang"
-	// FlagCC = " -save-temps=obj -w -mllvm -disable-llvm-optzns"
 	FlagCC = " -save-temps=obj -w"
-	NameLD = "llvm-link"
+	// FlagCCNoOptzns disable all optimization
+	FlagCCNoOptzns = " -mllvm -disable-llvm-optzns"
+	// FlagCCNoNumber add label to basic blocks and variables
+	FlagCCNoNumber = " -fno-discard-value-names"
+	NameLD         = "llvm-link"
 	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 	Path = ""
 	// path of clang and llvm-link
@@ -80,6 +83,7 @@ func replaceCC(cmd string, addFlag bool) string {
 			} else {
 				res += cmd[:i]
 				res += FlagCC
+				res += FlagCCNoNumber
 				res += cmd[i:]
 				if strings.HasSuffix(cmd, ".S\n") {
 					s1 := strings.Split(cmd, " ")
