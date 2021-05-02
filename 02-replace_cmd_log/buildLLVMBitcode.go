@@ -24,6 +24,7 @@ const (
 	// FlagCCNoNumber add label to basic blocks and variables
 	FlagCCNoNumber = " -fno-discard-value-names"
 	NameLD         = "llvm-link"
+	FlagLD         = " -v"
 	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 	Path = ""
 	// path of clang and llvm-link
@@ -110,6 +111,7 @@ func replaceLD(cmd string) string {
 		cmd = cmd[i+8:]
 		if strings.Count(cmd, ".") > 1 {
 			res += LD
+			res += FlagLD
 			res += " -o "
 			res += cmd
 			res = strings.Replace(res, ".o", ".bc", -1)
