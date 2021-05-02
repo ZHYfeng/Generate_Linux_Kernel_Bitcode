@@ -120,6 +120,8 @@ func replaceLD(cmd string) string {
 		}
 		res = strings.Replace(res, ".a ", ".bc ", -1)
 		res = strings.Replace(res, ".a\n", ".bc\n", -1)
+		// for this drivers/misc/lkdtm/rodata.bc
+		res = strings.Replace(res, "rodata_objcopy.bc", "rodata.bc", -1)
 		return res
 	}
 

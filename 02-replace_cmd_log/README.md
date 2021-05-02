@@ -32,3 +32,9 @@ make LLVM=1 V=1 -j64
 go run ~/data/git/2019-Build_Linux_Kernel_Into_LLVM_Bitcode/02-replace_cmd_log/buildLLVMBitcode.go -cmd=kernel -path=.
 bash build.sh
 ```
+
+# Notice
+
+```shell
+llvm-link -v -o drivers/misc/lkdtm/built-in.bc drivers/misc/lkdtm/core.bc drivers/misc/lkdtm/bugs.bc drivers/misc/lkdtm/heap.bc drivers/misc/lkdtm/perms.bc drivers/misc/lkdtm/refcount.bc drivers/misc/lkdtm/rodata.bc drivers/misc/lkdtm/usercopy.bc drivers/misc/lkdtm/stackleak.bc drivers/misc/lkdtm/cfi.bc drivers/misc/lkdtm/fortify.bc
+```
