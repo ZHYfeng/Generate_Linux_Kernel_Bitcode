@@ -18,7 +18,7 @@ const (
 	NameScript = "build.sh"
 
 	NameCC = "clang"
-	FlagCC = " -save-temps=obj -w"
+	FlagCC = " -save-temps=obj -w -g"
 	// FlagCCNoOptzns disable all optimization
 	FlagCCNoOptzns = " -mllvm -disable-llvm-optzns"
 	// FlagCCNoNumber add label to basic blocks and variables
