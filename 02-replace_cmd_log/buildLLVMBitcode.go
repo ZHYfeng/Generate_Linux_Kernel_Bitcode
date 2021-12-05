@@ -2,13 +2,25 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// Build one module or whole kernel, e.g., module, kernel
+var cmd = "kernel"
+
+// "The path of kernel, e.g., linux"
+var path = "."
+
+// "is -save-temps or not"
+var isSaveTemps = false
+
+var CC = filepath.Join(Path, NameClang)
+var LD = filepath.Join(Path, NameLD)
+var FlagCC = FlagAll + FlagCCNoNumber + FlagBitcode
 
 const (
 	PrefixCmd  = "cmd_"
@@ -17,24 +29,33 @@ const (
 	SuffixLD   = ".a.cmd"
 	NameScript = "build.sh"
 
-	NameCC = "clang"
-	FlagCC = " -save-temps=obj -w -g"
+	NameClang = "clang"
+
+	// FlagAll -w disable warning
+	// FlagAll -g debug info
+	FlagAll = " -w -g"
+
+	// FlagBitcode two kinds of two to generate bitcode
+	//FlagBitcode = " -save-temps=obj"
+	FlagBitcode = " -emit-llvm"
+
 	// FlagCCNoOptzns disable all optimization
 	FlagCCNoOptzns = " -mllvm -disable-llvm-optzns"
+
 	// FlagCCNoNumber add label to basic blocks and variables
 	FlagCCNoNumber = " -fno-discard-value-names"
-	NameLD         = "llvm-link"
-	FlagLD         = " -v"
+
+	NameLD = "llvm-link"
+	FlagLD = " -v"
+
+	// Path of clang and llvm-link
 	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 	Path = ""
-	// path of clang and llvm-link
 
 	CmdLinkVmlinux = "llvm-link -v -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
-	CmdTools       = "-BUILD_STR(s)=$(pound)s"
+	// CmdTools skip the cmd with CmdTools
+	CmdTools = "-BUILD_STR(s)=$(pound)s"
 )
-
-var CC = filepath.Join(Path, NameCC)
-var LD = filepath.Join(Path, NameLD)
 
 func getCmd(cmdFilePath string) string {
 	res := ""
@@ -45,7 +66,12 @@ func getCmd(cmdFilePath string) string {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer file.Close()
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
+
+			}
+		}(file)
 
 		scanner := bufio.NewScanner(file)
 		scanner.Split(bufio.ScanLines)
@@ -84,8 +110,14 @@ func replaceCC(cmd string, addFlag bool) string {
 			} else {
 				res += cmd[:i]
 				res += FlagCC
-				res += FlagCCNoNumber
 				res += cmd[i:]
+
+				// replace .o to .bc
+				if !isSaveTemps {
+					res = strings.Replace(res, ".o ", ".bc ", -1)
+				}
+
+				// can not compile .S, so just make a empty bitcode file
 				if strings.HasSuffix(cmd, ".S\n") {
 					s1 := strings.Split(cmd, " ")
 					s2 := s1[len(s1)-1]
@@ -117,7 +149,7 @@ func replaceLD(cmd string) string {
 			if strings.Contains(res, "drivers/of/unittest-data/built-in.o") {
 				res = ""
 			}
-			res = strings.Replace(res, ".o", ".bc", -1)
+			res = strings.Replace(res, ".o ", ".bc ", -1)
 		} else {
 			res = "echo \"\" > " + cmd
 		}
@@ -154,8 +186,11 @@ func buildModule(moduleDirPath string) string {
 			}
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				if strings.HasPrefix(cmd, NameCC) {
-					res1 += replaceCC(cmd, true)
+				if strings.HasPrefix(cmd, NameClang) {
+					res2 := replaceCC(cmd, true)
+					res2 = strings.Replace(res2, NameClang, CC, -1)
+					//res2 = strings.Replace(res2, IncludeOld, IncludeNew, -1)
+					res1 += res2
 				} else {
 					fmt.Println(path)
 					fmt.Println(cmd)
@@ -196,29 +231,30 @@ func generateScript(path string, cmd string) {
 	if err != nil {
 		log.Println(err)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 
 	_, _ = f.WriteString(res)
 }
 
-var cmd = flag.String("cmd", "module", "Build one module or whole kernel, e.g., module, kernel")
-var path = flag.String("path", ".", "The path of data, e.g., module.")
-
 func main() {
-	flag.Parse()
-	switch *cmd {
+	switch cmd {
 	case "module":
 		{
 			fmt.Printf("Build one module\n")
-			res := buildModule(*path)
-			generateScript(*path, res)
+			res := buildModule(path)
+			generateScript(path, res)
 		}
 	case "kernel":
 		{
 			fmt.Printf("Build whole kernel\n")
-			res := buildModule(*path)
+			res := buildModule(path)
 			res += CmdLinkVmlinux
-			generateScript(*path, res)
+			generateScript(path, res)
 		}
 	default:
 		fmt.Printf("cmd is invalid\n")
