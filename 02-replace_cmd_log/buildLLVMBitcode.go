@@ -149,8 +149,7 @@ func replaceLD(cmd string) string {
 			if strings.Contains(res, "drivers/of/unittest-data/built-in.o") {
 				res = ""
 			}
-			res += " "
-			res = strings.Replace(res, ".o ", ".bc ", -1)
+			res = strings.Replace(res, ".o", ".bc", -1)
 		} else {
 			res = "echo \"\" > " + cmd
 		}
