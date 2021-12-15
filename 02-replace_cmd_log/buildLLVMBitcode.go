@@ -16,11 +16,12 @@ var cmd = "kernel"
 var path = "."
 
 // "is -save-temps or not"
-var isSaveTemps = false
+// two kinds of two to generate bitcode
+var isSaveTemps = true
 
 var CC = filepath.Join(Path, NameClang)
 var LD = filepath.Join(Path, NameLD)
-var FlagCC = FlagAll + FlagCCNoNumber + FlagBitcode
+var FlagCC = FlagAll + FlagCCNoNumber
 
 const (
 	PrefixCmd  = "cmd_"
@@ -34,10 +35,6 @@ const (
 	// FlagAll -w disable warning
 	// FlagAll -g debug info
 	FlagAll = " -w -g"
-
-	// FlagBitcode two kinds of two to generate bitcode
-	//FlagBitcode = " -save-temps=obj"
-	FlagBitcode = " -emit-llvm"
 
 	// FlagCCNoOptzns disable all optimization
 	FlagCCNoOptzns = " -mllvm -disable-llvm-optzns"
@@ -110,10 +107,17 @@ func replaceCC(cmd string, addFlag bool) string {
 			} else {
 				res += cmd[:i]
 				res += FlagCC
+				if isSaveTemps {
+					res += " -save-temps=obj"
+				} else {
+					res += " -emit-llvm"
+				}
 				res += cmd[i:]
 
 				// replace .o to .bc
-				if !isSaveTemps {
+				if isSaveTemps {
+
+				} else {
 					res = strings.Replace(res, ".o ", ".bc ", -1)
 				}
 
