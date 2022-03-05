@@ -85,8 +85,8 @@ func getCmd(cmdFilePath string) string {
 					cmd := eachLine[i+3:]
 					res = cmd
 				} else {
-					fmt.Println(eachLine)
 					fmt.Println("Cmd Index not found")
+					fmt.Println(eachLine)
 				}
 			}
 		}
@@ -133,8 +133,8 @@ func replaceCC(cmd string, addFlag bool) string {
 				}
 			}
 		} else {
-			fmt.Println(cmd)
 			fmt.Println("CC Index not found")
+			fmt.Println(cmd)
 		}
 	}
 	return res
@@ -174,8 +174,8 @@ func replaceLD(cmd string) string {
 	} else if i := strings.Index(cmd, " cDPrsT"); i > -1 {
 		res = replace(cmd, i)
 	} else {
-		fmt.Println(cmd)
 		fmt.Println("LD Index not found")
+		fmt.Println(cmd)
 	}
 
 	return res
@@ -196,8 +196,9 @@ func buildModule(moduleDirPath string) string {
 					//res2 = strings.Replace(res2, IncludeOld, IncludeNew, -1)
 					res1 += res2
 				} else {
-					fmt.Println(path)
-					fmt.Println(cmd)
+					// fmt.Println("clang not found")
+					// fmt.Println(path)
+					// fmt.Println(cmd)
 				}
 			}
 			return nil
@@ -213,6 +214,10 @@ func buildModule(moduleDirPath string) string {
 				return err
 			}
 			if strings.HasSuffix(info.Name(), SuffixLD) {
+				cmd := getCmd(path)
+				res2 = replaceLD(cmd) + res2
+			}
+			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
 				res2 = replaceLD(cmd) + res2
 			}
