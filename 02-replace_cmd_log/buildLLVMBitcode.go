@@ -28,6 +28,7 @@ const (
 	SuffixCmd  = ".cmd"
 	SuffixCC   = ".o.cmd"
 	SuffixLD   = ".a.cmd"
+	SuffixLTO  = ".lto.o.cmd"
 	NameScript = "build.sh"
 
 	NameClang = "clang"
@@ -229,9 +230,13 @@ func buildModule(moduleDirPath string) string {
 			// for kernel module (*.ko, *.lto)
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				cmd = replaceLD(cmd)
-				res2 = cmd + res2
-				module_file = get_linked_target(cmd) + module_file
+				res2 = replaceLD(cmd) + res2
+			}
+			if strings.HasSuffix(info.Name(), SuffixLTO) {
+				cmd := getCmd(path)
+				cmd = cmd[strings.Index(cmd, "--whole-archive")+len("--whole-archive") : len(cmd)-1]
+				cmd = strings.Replace(cmd, ".o", ".bc", -1)
+				module_file = cmd + module_file
 			}
 			return nil
 		})
