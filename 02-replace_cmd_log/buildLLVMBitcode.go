@@ -181,6 +181,14 @@ func replaceLD(cmd string) string {
 	return res
 }
 
+func get_linked_target(cmd string) string {
+	res := ""
+	if strings.Contains(cmd, "llvm-link -v -o") {
+		res = cmd[len("llvm-link -v -o") : strings.Index(cmd, ".bc")+3]
+	}
+	return res
+}
+
 func buildModule(moduleDirPath string) string {
 	res1 := ""
 	err := filepath.Walk(moduleDirPath,
@@ -208,6 +216,7 @@ func buildModule(moduleDirPath string) string {
 	}
 
 	res2 := ""
+	module_file := ""
 	err = filepath.Walk(moduleDirPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -217,15 +226,21 @@ func buildModule(moduleDirPath string) string {
 				cmd := getCmd(path)
 				res2 = replaceLD(cmd) + res2
 			}
+			// for kernel module (*.ko, *.lto)
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				res2 = replaceLD(cmd) + res2
+				cmd = replaceLD(cmd)
+				res2 = cmd + res2
+				module_file = get_linked_target(cmd) + module_file
 			}
 			return nil
 		})
 	if err != nil {
 		log.Println(err)
 	}
+	fmt.Println("module_file")
+	fmt.Println(module_file)
+
 	return res1 + res2
 }
 
