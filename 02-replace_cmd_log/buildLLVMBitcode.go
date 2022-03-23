@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,17 +11,22 @@ import (
 )
 
 // Build one module or whole kernel, e.g., module, kernel
-var cmd = "kernel"
+var cmd = flag.String("cmd", "kernel", "Build one module or whole kernel, e.g., module, kernel")
 
 // "The path of kernel, e.g., linux"
 var path = "."
 
 // "is -save-temps or not"
 // two kinds of two to generate bitcode
-var isSaveTemps = true
+var IsSaveTemps = flag.Bool("isSaveTemp", true, "use -save-temps or -emit-llvm")
 
-var CC = filepath.Join(Path, NameClang)
-var LD = filepath.Join(Path, NameLD)
+var CC = flag.String("CC", "clang", "Name of CC")
+var LD = flag.String("LD", "llvm-link", "Name of LD")
+
+// ToolChain of clang and llvm-link
+// ToolChain   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
+var ToolChain = flag.String("toolchain", "", "Path of clang and llvm-link")
+
 var FlagCC = FlagAll + FlagCCNoNumber
 
 const (
@@ -45,10 +51,6 @@ const (
 
 	NameLD = "llvm-link"
 	FlagLD = " -v"
-
-	// Path of clang and llvm-link
-	// Path   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
-	Path = ""
 
 	CmdLinkVmlinux = "llvm-link -v -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
 	// CmdTools skip the cmd with CmdTools
@@ -99,55 +101,54 @@ func getCmd(cmdFilePath string) string {
 	return res
 }
 
-func replaceCC(cmd string, addFlag bool) string {
+func replaceCC(cmd string) string {
 	res := ""
-	if addFlag {
-		if i := strings.Index(cmd, " -c "); i > -1 {
-			if j := strings.Index(cmd, CmdTools); j > -1 {
+	if i := strings.Index(cmd, " -c "); i > -1 {
 
-			} else {
-				res += cmd[:i]
-				res += FlagCC
-				if isSaveTemps {
-					res += " -save-temps=obj"
-				} else {
-					res += " -emit-llvm"
-				}
-				res += cmd[i:]
-
-				// replace .o to .bc
-				if isSaveTemps {
-
-				} else {
-					res = strings.Replace(res, ".o ", ".bc ", -1)
-				}
-
-				// can not compile .S, so just make a empty bitcode file
-				if strings.HasSuffix(cmd, ".S\n") {
-					s1 := strings.Split(cmd, " ")
-					s2 := s1[len(s1)-1]
-					s3 := strings.Split(s2, ".")
-					s4 := s3[0]
-
-					res += "\n"
-					res = "echo \"\" > " + s4 + ".bc" + "\n"
-				}
-			}
-		} else {
-			fmt.Println("CC Index not found")
-			fmt.Println(cmd)
+		if j := strings.Index(cmd, CmdTools); j > -1 {
+			return res
 		}
+
+		res += cmd[:i]
+		res += FlagCC
+		if *IsSaveTemps {
+			res += " -save-temps=obj"
+		} else {
+			res += " -emit-llvm"
+		}
+		res += cmd[i:]
+
+		// replace .o to .bc
+		if *IsSaveTemps {
+
+		} else {
+			res = strings.Replace(res, ".o ", ".bc ", -1)
+		}
+
+		// can not compile .S, so just make a empty bitcode file
+		if strings.HasSuffix(cmd, ".S\n") {
+			s1 := strings.Split(cmd, " ")
+			s2 := s1[len(s1)-2]
+			s3 := strings.Split(s2, ".")
+			s4 := s3[0]
+
+			res += "\n"
+			res = "echo \"\" > " + s4 + ".bc" + "\n"
+		}
+	} else {
+		fmt.Println("CC Index not found")
+		fmt.Println(cmd)
 	}
 	return res
 }
 
 func replaceLD(cmd string) string {
 
-	replace := func(cmd string, i int) string {
+	replace := func(cmd string, i int, length int) string {
 		res := ""
-		cmd = cmd[i+8:]
+		cmd = cmd[i+length:]
 		if strings.Count(cmd, ".") > 1 {
-			res += LD
+			res += NameLD
 			res += FlagLD
 			res += " -o "
 			res += cmd
@@ -157,23 +158,34 @@ func replaceLD(cmd string) string {
 			res = strings.Replace(res, ".o", ".bc", -1)
 		} else {
 			res = "echo \"\" > " + cmd
+			res = strings.Replace(res, ".o", ".bc ", -1)
 		}
 		res = strings.Replace(res, ".a ", ".bc ", -1)
 		res = strings.Replace(res, ".a\n", ".bc\n", -1)
 		// for this drivers/misc/lkdtm/rodata.bc
 		res = strings.Replace(res, "rodata_objcopy.bc", "rodata.bc", -1)
 		res = strings.Replace(res, " drivers/of/unittest-data/built-in.bc", "", -1)
+
+		// for ";"
+		if strings.Count(res, ";") > 1 {
+			i := strings.Index(res, ";")
+			res = res[:i] + "\n"
+		}
 		return res
 	}
 
 	res := ""
 	// fmt.Println("Index: ", i)
-	if i := strings.Index(cmd, " rcSTPD"); i > -1 {
-		res = replace(cmd, i)
-	} else if i := strings.Index(cmd, " cDPrST"); i > -1 {
-		res = replace(cmd, i)
-	} else if i := strings.Index(cmd, " cDPrsT"); i > -1 {
-		res = replace(cmd, i)
+	if i := strings.Index(cmd, " rcSTPD "); i > -1 {
+		res = replace(cmd, i, len(" rcSTPD "))
+	} else if i := strings.Index(cmd, " cDPrST "); i > -1 {
+		res = replace(cmd, i, len(" cDPrST "))
+	} else if i := strings.Index(cmd, " cDPrsT "); i > -1 {
+		res = replace(cmd, i, len(" cDPrsT "))
+	} else if i := strings.Index(cmd, " rcsD "); i > -1 {
+		res = replace(cmd, i, len(" rcsD "))
+	} else if i := strings.Index(cmd, *LD); i > -1 {
+		res = replace(cmd, i, len(*LD))
 	} else {
 		fmt.Println("LD Index not found")
 		fmt.Println(cmd)
@@ -190,7 +202,7 @@ func get_linked_target(cmd string) string {
 	return res
 }
 
-func buildModule(moduleDirPath string) string {
+func build(moduleDirPath string) string {
 	res1 := ""
 	err := filepath.Walk(moduleDirPath,
 		func(path string, info os.FileInfo, err error) error {
@@ -199,15 +211,21 @@ func buildModule(moduleDirPath string) string {
 			}
 			if strings.HasSuffix(info.Name(), SuffixCC) {
 				cmd := getCmd(path)
-				if strings.HasPrefix(cmd, NameClang) {
-					res2 := replaceCC(cmd, true)
-					res2 = strings.Replace(res2, NameClang, CC, -1)
+				if strings.HasPrefix(cmd, *CC) {
+					res2 := replaceCC(cmd)
+					res2 = strings.Replace(res2, *CC, NameClang, -1)
+					res2 = strings.Replace(res2, " -Os ", " -O0 ", -1)
+					res2 = strings.Replace(res2, " -O3 ", " -O0 ", -1)
+					res2 = strings.Replace(res2, " -O2 ", " -O0 ", -1)
+					res2 = strings.Replace(res2, " -fno-var-tracking-assignments ", "  ", -1)
+					res2 = strings.Replace(res2, " -fconserve-stack ", "  ", -1)
+					res2 = strings.Replace(res2, " -march=armv8-a+crypto ", "  ", -1)
 					//res2 = strings.Replace(res2, IncludeOld, IncludeNew, -1)
 					res1 += res2
 				} else {
-					// fmt.Println("clang not found")
-					// fmt.Println(path)
-					// fmt.Println(cmd)
+					fmt.Println(*CC + " not found")
+					fmt.Println(path)
+					fmt.Println(cmd)
 				}
 			}
 			return nil
@@ -271,17 +289,19 @@ func generateScript(path string, cmd string) {
 }
 
 func main() {
-	switch cmd {
+	flag.Parse()
+
+	switch *cmd {
 	case "module":
 		{
 			fmt.Printf("Build one module\n")
-			res := buildModule(path)
+			res := build(path)
 			generateScript(path, res)
 		}
 	case "kernel":
 		{
 			fmt.Printf("Build whole kernel\n")
-			res := buildModule(path)
+			res := build(path)
 			res += CmdLinkVmlinux
 			generateScript(path, res)
 		}
