@@ -139,6 +139,11 @@ func replaceCC(cmd string) string {
 		fmt.Println("CC Index not found")
 		fmt.Println(cmd)
 	}
+	// for ";"
+	if strings.Count(res, ";") > 1 {
+		i := strings.Index(res, ";")
+		res = res[:i] + "\n"
+	}
 	return res
 }
 
