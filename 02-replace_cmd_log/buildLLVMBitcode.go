@@ -125,24 +125,24 @@ func replaceCC(cmd string) string {
 			res = strings.Replace(res, ".o ", ".bc ", -1)
 		}
 
+		// for ";"
+		if strings.Count(res, " ; ") == 1 {
+			i := strings.Index(res, ";")
+			res = res[:i] + "\n"
+		}
+		res = strings.TrimSpace(res) + "\n"
+
 		// can not compile .S, so just make a empty bitcode file
-		if strings.HasSuffix(cmd, ".S\n") {
-			s1 := strings.Split(cmd, " ")
+		if strings.HasSuffix(res, ".S\n") {
+			s1 := strings.Split(res, " ")
 			s2 := s1[len(s1)-2]
 			s3 := strings.Split(s2, ".")
 			s4 := s3[0]
-
-			res += "\n"
 			res = "echo \"\" > " + s4 + ".bc" + "\n"
 		}
 	} else {
 		fmt.Println("CC Index not found")
 		fmt.Println(cmd)
-	}
-	// for ";"
-	if strings.Count(res, ";") > 1 {
-		i := strings.Index(res, ";")
-		res = res[:i] + "\n"
 	}
 	return res
 }
