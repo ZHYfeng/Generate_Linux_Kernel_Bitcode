@@ -30,11 +30,13 @@ var ToolChain = flag.String("toolchain", "", "Path of clang and llvm-link")
 var FlagCC = FlagAll + FlagCCNoNumber
 
 const (
-	PrefixCmd  = "cmd_"
-	SuffixCmd  = ".cmd"
-	SuffixCC   = ".o.cmd"
+	PrefixCmd = "cmd_"
+	SuffixCmd = ".cmd"
+	SuffixCC  = ".o.cmd"
+
 	SuffixLD   = ".a.cmd"
 	SuffixLTO  = ".lto.o.cmd"
+	SuffixKO   = ".ko.cmd"
 	NameScript = "build.sh"
 
 	NameClang = "clang"
@@ -247,20 +249,30 @@ func build(moduleDirPath string) string {
 				return err
 			}
 			if strings.HasSuffix(info.Name(), SuffixLD) {
+				//for built-in module built-in.a
 				cmd := getCmd(path)
 				res2 = replaceLD(cmd) + res2
-			}
-			// for kernel module (*.ko, *.lto)
-			if strings.HasSuffix(info.Name(), SuffixCC) {
-				cmd := getCmd(path)
-				res2 = replaceLD(cmd) + res2
-			}
-			if strings.HasSuffix(info.Name(), SuffixLTO) {
+
+				//} else if strings.HasSuffix(info.Name(), SuffixCC) {
+				//	cmd := getCmd(path)
+				//	res2 = replaceLD(cmd) + res2
+
+			} else if strings.HasSuffix(info.Name(), SuffixLTO) {
+				//for external module *.lto
 				cmd := getCmd(path)
 				cmd = cmd[strings.Index(cmd, "--whole-archive")+len("--whole-archive") : len(cmd)-1]
 				cmd = strings.Replace(cmd, ".o", ".bc", -1)
 				module_file = cmd + module_file
+
+			} else if strings.HasSuffix(info.Name(), SuffixKO) {
+				//for external module *.ko
+				cmd := getCmd(path)
+				cmd = cmd[strings.Index(cmd, "--whole-archive")+len("--whole-archive") : len(cmd)-1]
+				cmd = strings.Replace(cmd, ".o", ".bc", -1)
+				module_file = cmd + module_file
+
 			}
+
 			return nil
 		})
 	if err != nil {
