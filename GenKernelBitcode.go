@@ -57,10 +57,16 @@ const (
 	FlagLD    = " -v "
 	FlagOutLD = " -o "
 
-	CmdLinkVmlinux = "llvm-link -v -o built-in.bc arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc init/built-in.bc usr/built-in.bc arch/x86/built-in.bc kernel/built-in.bc certs/built-in.bc mm/built-in.bc fs/built-in.bc ipc/built-in.bc security/built-in.bc crypto/built-in.bc block/built-in.bc lib/built-in.bc arch/x86/lib/built-in.bc lib/lib.bc arch/x86/lib/lib.bc drivers/built-in.bc sound/built-in.bc net/built-in.bc virt/built-in.bc arch/x86/pci/built-in.bc arch/x86/power/built-in.bc arch/x86/video/built-in.bc\n"
+	// arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc
+	CmdLinkVmlinux = " -v -o built-in.bc"
+
 	// CmdTools skip the cmd with CmdTools
 	CmdTools = "BUILD_STR(s)=$(pound)s"
 )
+
+var bitcodes map[string]bool
+var linkedBitcodes map[string]bool
+var builtinModules map[string]bool
 
 func getCmd(cmdFilePath string) string {
 	res := ""
@@ -299,7 +305,7 @@ func handleKO(cmd string) (string, string) {
 	return res, moduleFile
 }
 
-func build(kernelPath string) string {
+func build(kernelPath string) (string, string) {
 	res1 := ""
 
 	var SuffixCCWithLD []string
@@ -344,7 +350,27 @@ func build(kernelPath string) string {
 			if strings.HasSuffix(info.Name(), SuffixLD) {
 				//for built-in module built-in.a
 				cmd := getCmd(path)
-				res2 = handleLD(cmd) + res2
+				cmd = handleLD(cmd)
+				res2 = cmd + res2
+				if strings.Index(cmd, FlagOutLD) > -1 {
+					cmd = cmd[strings.Index(cmd, FlagOutLD)+len(FlagOutLD):]
+					obj := cmd[:strings.Index(cmd, " ")]
+					if _, ok := linkedBitcodes[obj]; ok {
+
+					} else {
+						builtinModules[obj] = true
+						println("add obj: " + obj)
+						println("cmd: " + cmd)
+						fmt.Printf("builtinModules: %v\n", builtinModules)
+
+					}
+
+					objs := strings.Split(cmd[strings.Index(cmd, " "):len(cmd)-1], " ")
+					for _, bc := range objs {
+						linkedBitcodes[bc] = true
+						println("add bc: " + bc)
+					}
+				}
 
 			} else if strings.HasSuffix(info.Name(), SuffixLTO) {
 				//for external module *.lto
@@ -368,7 +394,12 @@ func build(kernelPath string) string {
 	fmt.Println("moduleFiles: ")
 	fmt.Println(moduleFiles)
 
-	return res1 + res3 + res2 + "\n# " + moduleFiles + "\n"
+	var res5 string
+	for module, _ := range builtinModules {
+		res5 += " " + module
+	}
+
+	return res1 + res3 + res2 + "\n# external modules: " + moduleFiles + "\n", res5
 }
 
 func generateScript(path string, cmd string) {
@@ -395,21 +426,24 @@ func generateScript(path string, cmd string) {
 
 func main() {
 	flag.Parse()
-
 	*path, _ = filepath.Abs(*path)
+
+	bitcodes = make(map[string]bool)
+	linkedBitcodes = make(map[string]bool)
+	builtinModules = make(map[string]bool)
 
 	switch *cmd {
 	case "module":
 		{
 			fmt.Printf("Build module\n")
-			res := build(*path)
+			res, _ := build(*path)
 			generateScript(*path, res)
 		}
 	case "kernel":
 		{
 			fmt.Printf("Build kernel and external module\n")
-			res := build(*path)
-			res += CmdLinkVmlinux
+			res, res5 := build(*path)
+			res += filepath.Join(*ToolChain, NameLD) + CmdLinkVmlinux + res5 + "\n"
 			generateScript(*path, res)
 		}
 	default:
