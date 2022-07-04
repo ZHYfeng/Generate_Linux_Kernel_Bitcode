@@ -359,16 +359,12 @@ func build(kernelPath string) (string, string) {
 
 					} else {
 						builtinModules[obj] = true
-						println("add obj: " + obj)
-						println("cmd: " + cmd)
-						fmt.Printf("builtinModules: %v\n", builtinModules)
 
 					}
 
 					objs := strings.Split(cmd[strings.Index(cmd, " "):len(cmd)-1], " ")
 					for _, bc := range objs {
 						linkedBitcodes[bc] = true
-						println("add bc: " + bc)
 					}
 				}
 
