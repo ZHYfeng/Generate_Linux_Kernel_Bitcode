@@ -16,17 +16,18 @@ var cmd = flag.String("cmd", "kernel", "Build one module or whole kernel, e.g., 
 // The path of kernel, e.g., linux
 var path = flag.String("path", ".", "the path of kernel")
 
-// "is -save-temps or not"
+// IsSaveTemps : use -save-temps or emit-llvm to generate LLVM Bitcode
 // two kinds of two to generate bitcode
 var IsSaveTemps = flag.Bool("isSaveTemp", false, "use -save-temps or -emit-llvm")
 
 var CC = flag.String("CC", "clang", "Name of CC")
 var LD = flag.String("LD", "llvm-link", "Name of LD")
-
+var AR = flag.String("AR", "llvm-ar", "Name of AR")
 var LLD = flag.String("LLD", "ld.lld", "Name of LD")
+var OBJCOPY = flag.String("OBJCOPY", "llvm-objcopy", "Name of OBJCOPY")
+var STRIP = flag.String("STRIP", "llvm-strip", "Name of STRIP")
 
 // ToolChain of clang and llvm-link
-// ToolChain   = "/home/yhao016/data/benchmark/hang/kernel/toolchain/clang-r353983c/bin/"
 var ToolChain = flag.String("toolchain", "", "Path of clang and llvm-link")
 
 var FlagCC = FlagAll + FlagCCNoNumber
@@ -43,8 +44,8 @@ const (
 
 	NameClang = "clang"
 
-	// FlagAll -w disable warning
-	// FlagAll -g debug info
+	// FlagAll : -w disable warning
+	// FlagAll : -g debug info
 	FlagAll = " -w -g"
 
 	// FlagCCNoOptzns disable all optimization
@@ -148,16 +149,15 @@ func handleCC(cmd string) string {
 		if strings.HasSuffix(res, ".S\n") {
 			s1 := strings.Split(res, " ")
 			s2 := s1[len(s1)-2]
-			s3 := strings.Split(s2, ".")
-			s4 := s3[0]
-			res = "echo \"\" > " + s4 + ".bc" + "\n"
+			s4 := strings.Replace(s2, ".o ", ".bc ", -1)
+			res = "echo \"\" > " + s4 + "\n"
 		}
 	} else {
 		fmt.Println("CC Index not found")
 		fmt.Println(cmd)
 	}
-
-	res = strings.Replace(res, *CC, filepath.Join(*ToolChain, NameClang), -1)
+	res = " " + res
+	res = strings.Replace(res, " "+*CC+" ", " "+filepath.Join(*ToolChain, NameClang)+" ", -1)
 	res = strings.Replace(res, " -Os ", " -O0 ", -1)
 	res = strings.Replace(res, " -O3 ", " -O0 ", -1)
 	res = strings.Replace(res, " -O2 ", " -O0 ", -1)
@@ -212,14 +212,57 @@ func handleSuffixCCWithLD(cmd string, path string) string {
 		res = strings.Replace(res, ".o ", ".bc ", -1)
 		res += "\n"
 
+	} else if strings.HasPrefix(cmd, *LLD) {
+		res += filepath.Join(*ToolChain, NameLD)
+		res += FlagLD
+		res += FlagOutLD
+
+		cmd = cmd[:len(cmd)-1]
+		s1 := strings.Split(cmd, " ")
+		obj := ""
+		for _, s := range s1 {
+			if strings.HasSuffix(s, ".o") {
+				obj = " " + strings.Replace(s, ".o", ".bc", -1) + obj
+			}
+		}
+		res += obj
+		res += "\n"
 	} else {
 		fmt.Println("handleSuffixCCWithLD cmd error: " + cmd)
 	}
 	return res
 }
 
-func handleLD(cmd string) string {
+func handleOBJCOPY(cmd string) string {
+	res := filepath.Join(*ToolChain, NameLD) + FlagLD + FlagOutLD
+	cmd = cmd[:len(cmd)-1]
+	s1 := strings.Split(cmd, " ")
+	obj := ""
+	for _, s := range s1 {
+		if strings.HasSuffix(s, ".o") {
+			obj = " " + strings.Replace(s, ".o", ".bc", -1) + obj
+		}
+	}
+	res += obj
+	res += "\n"
+	return res
+}
 
+func handleSTRIP(cmd string) string {
+	res := filepath.Join(*ToolChain, NameLD) + FlagLD + FlagOutLD
+	s1 := strings.Split(cmd, ";")
+	cmd = s1[0]
+	s1 = strings.Split(cmd, " ")
+	for _, s := range s1 {
+		if strings.HasSuffix(s, ".o") {
+			res = res + " " + strings.Replace(s, ".o", ".bc", -1)
+		}
+	}
+	res += "\n"
+	return res
+}
+
+func handleLD(cmd string) string {
 	replace := func(cmd string, i int, length int) string {
 		res := ""
 		cmd = cmd[i+length:]
@@ -274,12 +317,22 @@ func handleLTO(cmd string) string {
 	res := ""
 	res += filepath.Join(*ToolChain, NameLD)
 	res += FlagLD
+	res += FlagOutLD
 
-	cmd = cmd[strings.Index(cmd, FlagOutLD):]
-	cmd = strings.Replace(cmd, " --whole-archive ", "", -1)
-	cmd = strings.Replace(cmd, ".o", ".bc", -1)
-
-	res += cmd
+	cmd = cmd[strings.Index(cmd, FlagOutLD) : len(cmd)-1]
+	objs := strings.Split(cmd, " ")
+	output := false
+	for _, obj := range objs {
+		if obj == "-o" {
+			output = true
+		} else if output && obj != "" {
+			res += strings.Replace(obj, ".o", ".bc", -1)
+			output = false
+		} else if strings.HasSuffix(obj, ".o") {
+			res += " " + strings.Replace(obj, ".o", ".bc", -1)
+		}
+	}
+	res += "\n"
 	return res
 }
 
@@ -306,23 +359,34 @@ func handleKO(cmd string) (string, string) {
 }
 
 func build(kernelPath string) (string, string) {
-	res1 := ""
-
-	var SuffixCCWithLD []string
+	cmdCC := ""
+	cmdLDInCC := ""
 
 	err := filepath.Walk(kernelPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
+			//  handle, all *.o.cmd files.
+			//  do not include  *.lto.o.cmd files
 			if strings.HasSuffix(info.Name(), SuffixCC) && !strings.HasSuffix(info.Name(), SuffixLTO) {
+				//  get cmd from the file
 				cmd := getCmd(path)
 				if strings.HasPrefix(cmd, *CC) {
-					res2 := handleCC(cmd)
-					//res2 = strings.Replace(res2, IncludeOld, IncludeNew, -1)
-					res1 += res2
+					cmd := handleCC(cmd)
+					cmdCC += cmd
+				} else if strings.Index(cmd, *AR) > -1 {
+					cmd = handleLD(cmd)
+					cmdLDInCC = cmd + cmdLDInCC
 				} else if strings.Index(cmd, *LLD) > -1 {
-					SuffixCCWithLD = append(SuffixCCWithLD, cmd)
+					cmd = handleSuffixCCWithLD(cmd, kernelPath)
+					cmdLDInCC = cmd + cmdLDInCC
+				} else if strings.HasPrefix(cmd, *OBJCOPY) {
+					cmd = handleOBJCOPY(cmd)
+					cmdLDInCC = cmd + cmdLDInCC
+				} else if strings.HasPrefix(cmd, *STRIP) {
+					cmd = handleSTRIP(cmd)
+					cmdLDInCC = cmd + cmdLDInCC
 				} else {
 					fmt.Println(*CC + " not found")
 					fmt.Println(path)
@@ -335,12 +399,7 @@ func build(kernelPath string) (string, string) {
 		log.Println(err)
 	}
 
-	res3 := ""
-	for _, cmd := range SuffixCCWithLD {
-		res3 = handleSuffixCCWithLD(cmd, kernelPath) + res3
-	}
-
-	res2 := ""
+	cmdLink := ""
 	moduleFiles := ""
 	err = filepath.Walk(kernelPath,
 		func(path string, info os.FileInfo, err error) error {
@@ -351,7 +410,7 @@ func build(kernelPath string) (string, string) {
 				//for built-in module built-in.a
 				cmd := getCmd(path)
 				cmd = handleLD(cmd)
-				res2 = cmd + res2
+				cmdLink = cmd + cmdLink
 				if strings.Index(cmd, FlagOutLD) > -1 {
 					cmd = cmd[strings.Index(cmd, FlagOutLD)+len(FlagOutLD):]
 					obj := cmd[:strings.Index(cmd, " ")]
@@ -371,12 +430,12 @@ func build(kernelPath string) (string, string) {
 			} else if strings.HasSuffix(info.Name(), SuffixLTO) {
 				//for external module *.lto
 				cmd := getCmd(path)
-				res2 = handleLTO(cmd) + res2
+				cmdLink = handleLTO(cmd) + cmdLink
 
 			} else if strings.HasSuffix(info.Name(), SuffixKO) {
 				//for external module *.ko
 				cmd, moduleFile := handleKO(getCmd(path))
-				res2 = cmd + res2
+				cmdLink = cmd + cmdLink
 				moduleFiles = moduleFile + " " + moduleFiles
 			}
 
@@ -390,12 +449,12 @@ func build(kernelPath string) (string, string) {
 	fmt.Println("moduleFiles: ")
 	fmt.Println(moduleFiles)
 
-	var res5 string
+	var resFinal string
 	for module, _ := range builtinModules {
-		res5 += " " + module
+		resFinal += " " + module
 	}
 
-	return res1 + res3 + res2 + "\n# external modules: " + moduleFiles + "\n", res5
+	return cmdCC + cmdLDInCC + cmdLink + "\n# external modules: " + moduleFiles + "\n", resFinal
 }
 
 func generateScript(path string, cmd string) {
