@@ -20,6 +20,7 @@ var path = flag.String("path", ".", "the path of kernel")
 // two kinds of two to generate bitcode
 var IsSaveTemps = flag.Bool("isSaveTemp", false, "use -save-temps or -emit-llvm")
 
+// tools used in build kernel
 var CC = flag.String("CC", "clang", "Name of CC")
 var LD = flag.String("LD", "llvm-link", "Name of LD")
 var AR = flag.String("AR", "llvm-ar", "Name of AR")
@@ -58,7 +59,6 @@ const (
 	FlagLD    = " -v "
 	FlagOutLD = " -o "
 
-	// arch/x86/kernel/head_64.bc arch/x86/kernel/head64.bc arch/x86/kernel/ebda.bc arch/x86/kernel/platform-quirks.bc
 	CmdLinkVmlinux = " -v -o built-in.bc"
 
 	// CmdTools skip the cmd with CmdTools
@@ -69,6 +69,7 @@ var bitcodes map[string]bool
 var linkedBitcodes map[string]bool
 var builtinModules map[string]bool
 
+// get cmd from *.cmd file
 func getCmd(cmdFilePath string) string {
 	res := ""
 	if _, err := os.Stat(cmdFilePath); os.IsNotExist(err) {
@@ -114,6 +115,7 @@ func getCmd(cmdFilePath string) string {
 	return res
 }
 
+// for CC cmd, use " -save-temps=obj" or " -emit-llvm" to generate llvm bitcode
 func handleCC(cmd string) string {
 	res := ""
 	if i := strings.Index(cmd, " -c "); i > -1 {
@@ -138,7 +140,7 @@ func handleCC(cmd string) string {
 			res = strings.Replace(res, ".o ", ".bc ", -1)
 		}
 
-		// for ";"
+		// for multiply ";"
 		if strings.Count(res, " ; ") == 1 {
 			i := strings.Index(res, ";")
 			res = res[:i] + "\n"
@@ -157,6 +159,7 @@ func handleCC(cmd string) string {
 		fmt.Println(cmd)
 	}
 	res = " " + res
+	// use -O0 install of other optimization
 	res = strings.Replace(res, " "+*CC+" ", " "+filepath.Join(*ToolChain, NameClang)+" ", -1)
 	res = strings.Replace(res, " -Os ", " -O0 ", -1)
 	res = strings.Replace(res, " -O3 ", " -O0 ", -1)
@@ -171,6 +174,9 @@ func handleCC(cmd string) string {
 	return res
 }
 
+// handler LD cmd in *.o.cmd
+// @file_name in *.o.cmd includes the related file
+// need to get the name from that file
 func handleSuffixCCWithLD(cmd string, path string) string {
 	res := ""
 	if strings.Index(cmd, "@") > -1 {
@@ -233,6 +239,7 @@ func handleSuffixCCWithLD(cmd string, path string) string {
 	return res
 }
 
+// handle llvm-objcopy cmd
 func handleOBJCOPY(cmd string) string {
 	res := filepath.Join(*ToolChain, NameLD) + FlagLD + FlagOutLD
 	cmd = cmd[:len(cmd)-1]
@@ -248,6 +255,7 @@ func handleOBJCOPY(cmd string) string {
 	return res
 }
 
+// handle llvm-strip cmd
 func handleSTRIP(cmd string) string {
 	res := filepath.Join(*ToolChain, NameLD) + FlagLD + FlagOutLD
 	s1 := strings.Split(cmd, ";")
@@ -262,6 +270,7 @@ func handleSTRIP(cmd string) string {
 	return res
 }
 
+// use llvm-link to link all bitcode
 func handleLD(cmd string) string {
 	replace := func(cmd string, i int, length int) string {
 		res := ""
@@ -313,6 +322,7 @@ func handleLD(cmd string) string {
 	return res
 }
 
+// handler *.lto for external modules
 func handleLTO(cmd string) string {
 	res := ""
 	res += filepath.Join(*ToolChain, NameLD)
@@ -336,6 +346,7 @@ func handleLTO(cmd string) string {
 	return res
 }
 
+// handle .ko for external modules
 func handleKO(cmd string) (string, string) {
 	res := ""
 	res += filepath.Join(*ToolChain, NameLD)
@@ -358,6 +369,7 @@ func handleKO(cmd string) (string, string) {
 	return res, moduleFile
 }
 
+// find all *.cmd file and handle the cmd in them
 func build(kernelPath string) (string, string) {
 	cmdCC := ""
 	cmdLDInCC := ""
@@ -479,6 +491,8 @@ func generateScript(path string, cmd string) {
 	_, _ = f.WriteString("\n# path: " + path + "\n")
 }
 
+// collect compile cmd from *.cmd files in kernel
+// get cmd to generate llvm bitcode
 func main() {
 	flag.Parse()
 	*path, _ = filepath.Abs(*path)
