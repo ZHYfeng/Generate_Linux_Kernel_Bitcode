@@ -18,7 +18,7 @@ var path = flag.String("path", ".", "the path of kernel")
 
 // IsSaveTemps : use -save-temps or emit-llvm to generate LLVM Bitcode
 // two kinds of two to generate bitcode
-var IsSaveTemps = flag.Bool("isSaveTemp", false, "use -save-temps or -emit-llvm")
+var IsSaveTemps = flag.Bool("isSaveTemp", true, "use -save-temps or -emit-llvm")
 
 // tools used in build kernel
 var CC = flag.String("CC", "clang", "Name of CC")
@@ -272,53 +272,39 @@ func handleSTRIP(cmd string) string {
 
 // use llvm-link to link all bitcode
 func handleLD(cmd string) string {
-	replace := func(cmd string, i int, length int) string {
+	replace := func(cmd string) string {
 		res := ""
-		cmd = cmd[i+length:]
 		if strings.Count(cmd, ".") > 1 {
-			res += filepath.Join(*ToolChain, NameLD)
-			res += FlagLD
-			res += FlagOutLD
-			res += cmd
-			if strings.Contains(res, "drivers/of/unittest-data/built-in.o") {
-				res = ""
-			}
-			res = strings.Replace(res, ".o", ".bc", -1)
+			res = cmd
+			res = strings.Replace(res, " "+*AR+" ", " "+filepath.Join(*ToolChain, NameLD)+FlagLD+FlagOutLD, -1)
 		} else {
 			res = "echo \"\" > " + cmd
-			res = strings.Replace(res, ".o", ".bc ", -1)
+			res = strings.Replace(res, " "+*AR+" ", " ", -1)
 		}
+
+		res = strings.Replace(res, " rcSTPD ", " ", -1)
+		res = strings.Replace(res, " cDPrST ", " ", -1)
+		res = strings.Replace(res, " cDPrsT ", " ", -1)
+		res = strings.Replace(res, " rcsD ", " ", -1)
+
+		res = strings.Replace(res, ".o", ".bc", -1)
 		res = strings.Replace(res, ".a ", ".bc ", -1)
 		res = strings.Replace(res, ".a\n", ".bc\n", -1)
+
 		// for this drivers/misc/lkdtm/rodata.bc
 		res = strings.Replace(res, "rodata_objcopy.bc", "rodata.bc", -1)
 		res = strings.Replace(res, " drivers/of/unittest-data/built-in.bc", "", -1)
 
-		// for multiply cmd or ";" pick the first one
-		if strings.Count(res, ";") > 1 {
-			i := strings.Index(res, ";")
-			res = res[:i] + "\n"
-		}
 		return res
 	}
 
 	res := ""
-	// fmt.Println("Index: ", i)
-	if i := strings.Index(cmd, " rcSTPD "); i > -1 {
-		res = replace(cmd, i, len(" rcSTPD "))
-	} else if i := strings.Index(cmd, " cDPrST "); i > -1 {
-		res = replace(cmd, i, len(" cDPrST "))
-	} else if i := strings.Index(cmd, " cDPrsT "); i > -1 {
-		res = replace(cmd, i, len(" cDPrsT "))
-	} else if i := strings.Index(cmd, " rcsD "); i > -1 {
-		res = replace(cmd, i, len(" rcsD "))
-	} else if i := strings.Index(cmd, *LD); i > -1 {
-		res = replace(cmd, i, len(*LD))
-	} else {
-		fmt.Println("LD Index not found")
-		fmt.Println(cmd)
+	cmds := strings.Split(cmd, "; ")
+	for _, cmd := range cmds {
+		if i := strings.Index(cmd, " "+*AR+" "); i > -1 {
+			res += replace(cmd)
+		}
 	}
-
 	return res
 }
 
@@ -353,15 +339,15 @@ func handleKO(cmd string) (string, string) {
 	res += FlagLD
 	res += FlagOutLD
 
-	// for multiply cmd or ";" pick the first one
-	if strings.Count(cmd, ";") > 1 {
-		i := strings.Index(cmd, ";")
-		cmd = cmd[:i] + "\n"
-	}
-
 	cmd = cmd[strings.Index(cmd, FlagOutLD)+len(FlagOutLD):]
 	cmd = strings.Replace(cmd, ".ko", ".ko.bc", -1)
 	cmd = strings.Replace(cmd, ".o", ".bc", -1)
+
+	// for multiply cmd or ";" pick the first one
+	if strings.Count(cmd, ";") >= 1 {
+		i := strings.Index(cmd, ";")
+		cmd = cmd[:i] + "\n"
+	}
 
 	moduleFile := cmd[:strings.Index(cmd, ".ko.bc")+len(".ko.bc")]
 	res += cmd
@@ -424,18 +410,32 @@ func build(kernelPath string) (string, string) {
 				cmd = handleLD(cmd)
 				cmdLink = cmd + cmdLink
 				if strings.Index(cmd, FlagOutLD) > -1 {
-					cmd = cmd[strings.Index(cmd, FlagOutLD)+len(FlagOutLD):]
-					obj := cmd[:strings.Index(cmd, " ")]
+					obj := cmd[strings.Index(cmd, FlagOutLD)+len(FlagOutLD) : len(cmd)-1]
 					if _, ok := linkedBitcodes[obj]; ok {
 
 					} else {
-						builtinModules[obj] = true
+						// do not insert "built-in.bc"
+						if obj == "built-in.bc" {
+
+						} else {
+							builtinModules[obj] = true
+						}
 
 					}
 
-					objs := strings.Split(cmd[strings.Index(cmd, " "):len(cmd)-1], " ")
+					objs := strings.Split(cmd[:strings.Index(cmd, "|")], " ")
+					base := ""
 					for _, bc := range objs {
-						linkedBitcodes[bc] = true
+						// handle printf
+						if i := strings.Index(bc, "%s"); i > -1 {
+							base = bc[1:strings.Index(bc, "%s")]
+							if base == "./" {
+								base = ""
+							}
+						}
+						if strings.Index(bc, ".bc") > -1 {
+							linkedBitcodes[base+bc] = true
+						}
 					}
 				}
 
@@ -462,7 +462,7 @@ func build(kernelPath string) (string, string) {
 	fmt.Println(moduleFiles)
 
 	var resFinal string
-	for module, _ := range builtinModules {
+	for module := range builtinModules {
 		resFinal += " " + module
 	}
 
@@ -512,7 +512,9 @@ func main() {
 		{
 			fmt.Printf("Build kernel and external module\n")
 			res, res5 := build(*path)
-			res += filepath.Join(*ToolChain, NameLD) + CmdLinkVmlinux + res5 + "\n"
+			if res5 != "" {
+				res += filepath.Join(*ToolChain, NameLD) + CmdLinkVmlinux + res5 + "\n"
+			}
 			generateScript(*path, res)
 		}
 	default:
