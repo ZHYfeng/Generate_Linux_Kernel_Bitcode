@@ -18,7 +18,7 @@ var path = flag.String("path", ".", "the path of kernel")
 
 // IsSaveTemps : use -save-temps or emit-llvm to generate LLVM Bitcode
 // two kinds of two to generate bitcode
-var IsSaveTemps = flag.Bool("isSaveTemp", true, "use -save-temps or -emit-llvm")
+var IsSaveTemps = flag.Bool("isSaveTemp", false, "use -save-temps or -emit-llvm")
 
 // tools used in build kernel
 var CC = flag.String("CC", "clang", "Name of CC")
