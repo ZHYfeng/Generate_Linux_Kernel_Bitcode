@@ -178,6 +178,14 @@ func handleCC(cmd string) string {
 // @file_name in *.o.cmd includes the related file
 // need to get the name from that file
 func handleSuffixCCWithLD(cmd string, path string) string {
+
+	// for multiply ";"
+	if strings.Count(cmd, " ; ") == 1 {
+		i := strings.Index(cmd, ";")
+		cmd = cmd[:i] + "\n"
+	}
+	cmd = strings.TrimSpace(cmd) + "\n"
+
 	res := ""
 	if strings.Index(cmd, "@") > -1 {
 		fileName := cmd[strings.Index(cmd, "@")+1 : len(cmd)-1]
