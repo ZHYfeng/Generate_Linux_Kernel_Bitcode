@@ -31,7 +31,7 @@ var STRIP = flag.String("STRIP", "llvm-strip", "Name of STRIP")
 // ToolChain of clang and llvm-link
 var ToolChain = flag.String("toolchain", "", "Path of clang and llvm-link")
 
-var FlagCC = FlagAll + FlagCCNoNumber
+var FlagCC = FlagAll + FlagCCNoNumber + FlagCCNoNumber
 
 const (
 	PrefixCmd = "cmd_"
