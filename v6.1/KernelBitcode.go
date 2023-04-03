@@ -302,6 +302,7 @@ func handleLD(cmd string) string {
 		// for this drivers/misc/lkdtm/rodata.bc
 		res = strings.Replace(res, "rodata_objcopy.bc", "rodata.bc", -1)
 		res = strings.Replace(res, " drivers/of/unittest-data/built-in.bc", "", -1)
+		res = strings.Replace(res, " unittest-data/built-in.bc", "", -1)
 
 		return res
 	}
