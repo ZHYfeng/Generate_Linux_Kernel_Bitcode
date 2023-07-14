@@ -26,6 +26,8 @@ def preprocess_command(command):
 
 
 def execute_command(command):
+    if not command.startswith('clang '):
+        return
     modified_command = preprocess_command(command)
     # print(modified_command)
     subprocess.run(modified_command, shell=True)
